@@ -25,60 +25,55 @@ admin.initializeApp(functions.config().firebase);
  * Followers add a flag to `/followers/{followedUid}/{followerUid}`.
  * Users save their device notification tokens to `/users/{followedUid}/notificationTokens/{notificationToken}`.
  */
-exports.sendFollowerNotification = functions.database.ref('/followers/{followedUid}/{followerUid}').onWrite(event => {
-  const followerUid = event.params.followerUid;
-  const followedUid = event.params.followedUid;
+exports.sendFollowerNotification = functions.database.ref('/crisis/{crisisId}/').onWrite(event => {
+  const crisisId = event.params.crisisId;
+  //const team = event.params.team;
   // If un-follow we exit the function.
   if (!event.data.val()) {
-    return console.log('User ', followerUid, 'un-followed user', followedUid);
+    return console.log('Crisis ', crisisId, ' was removed');
   }
-  console.log('We have a new follower UID:', followerUid, 'for user:', followerUid);
 
-  // Get the list of device notification tokens.
-  const getDeviceTokensPromise = admin.database().ref(`/users/${followedUid}/notificationTokens`).once('value');
+  // Get the values at team, crisisId, and crisisAddress. I need to write this as a promise thats fulfilled
+  // before the get device tokens promise
+  const getCrisisDataPromise = admin.database().ref(`/crisis/${crisisId}/`).once("value");
 
-  // Get the follower profile.
-  const getFollowerProfilePromise = admin.auth().getUser(followerUid);
+  return Promise.all([getCrisisDataPromise]).then(results => {
+    const crisisDataSnapshot = results[0].val();
 
-  return Promise.all([getDeviceTokensPromise, getFollowerProfilePromise]).then(results => {
-    const tokensSnapshot = results[0];
-    const follower = results[1];
+    var team = crisisDataSnapshot["team"];
+    var crisisAddress = crisisDataSnapshot["crisisAddress"];
+    console.log('We have a new crisis UID:', crisisId, ' for team:', team, ' at ', crisisAddress);
 
-    // Check if there are any device tokens.
-    if (!tokensSnapshot.hasChildren()) {
-      return console.log('There are no notification tokens to send to.');
-    }
-    console.log('There are', tokensSnapshot.numChildren(), 'tokens to send notifications to.');
-    console.log('Fetched follower profile', follower);
 
-    // Notification details.
-    const payload = {
-      notification: {
-        title: 'You have a new follower!',
-        body: `${follower.displayName} is now following you.`,
-        icon: follower.photoURL
-      }
-    };
+    // Get the list of device notification tokens.
+    const getDeviceTokensPromise = admin.database().ref(`/teams/${team}/teamMembers/0/notificationToken/`).once('value');
 
-    // Listing all tokens.
-    const tokens = Object.keys(tokensSnapshot.val());
+    return Promise.all([getDeviceTokensPromise]).then(results =>  {//the purpose here is to make sure both gets are fulfilled before moving on
+      const token = "fvIzSfQxfJI:APA91bF7JmtjcKon_xLUUEV4Hbb3D_ABqpsqYpEIMd3pnz12oSqQnrAPuPLenNCUirkhQaZ5DB85FYUIEZ_y0qOVdsUtcZO48_fFpxjIl5tnAmkpJ6w-IeTnqRW5yqZ0Dr3bxo9f_d1Q";//results[0].val();
 
-    // Send notifications to all tokens.
-    return admin.messaging().sendToDevice(tokens, payload).then(response => {
-      // For each message check if there was an error.
-      const tokensToRemove = [];
-      response.results.forEach((result, index) => {
-        const error = result.error;
-        if (error) {
-          console.error('Failure sending notification to', tokens[index], error);
-          // Cleanup the tokens who are not registered anymore.
-          if (error.code === 'messaging/invalid-registration-token' ||
-              error.code === 'messaging/registration-token-not-registered') {
-            tokensToRemove.push(tokensSnapshot.ref.child(tokens[index]).remove());
-          }
+      // Check if there are any device tokens.
+
+      console.log('The token is', token);
+
+      // Notification details.
+      const payload = {
+        data: {
+          crisisId: crisisId,
+          crisisAddress: crisisAddress
         }
+      };
+
+
+      // Send notifications to all tokens.
+      return admin.messaging().sendToDevice(token, payload).then(response => {
+        response.results.forEach((result, index) => {
+          const error = result.error;
+          if (error) {
+            console.error('Failure sending notification to', tokens[index], error);
+            // Cleanup the tokens who are not registered anymore.
+          }
+        });
       });
-      return Promise.all(tokensToRemove);
-    });
+      });
   });
 });
