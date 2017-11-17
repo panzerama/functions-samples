@@ -25,31 +25,38 @@ admin.initializeApp(functions.config().firebase);
  * Followers add a flag to `/followers/{followedUid}/{followerUid}`.
  * Users save their device notification tokens to `/users/{followedUid}/notificationTokens/{notificationToken}`.
  */
-exports.sendFollowerNotification = functions.database.ref('/crisis/{crisisId}/').onWrite(event => {
-  const crisisId = event.params.crisisId;
+exports.sendCrisisNotification = functions.database.ref('/crisis/').onWrite(event => {
+  //const crisisId = "000001";
   //const team = event.params.team;
-  // If un-follow we exit the function.
-  if (!event.data.val()) {
-    return console.log('Crisis ', crisisId, ' was removed');
+
+  //event.data.val() will contain all of the crises. I need to find the one that hasn't
+  //been responded to.
+
+  var crisis_table_values = event.data.val();
+
+  console.log("crisis_table_values ", crisis_table_values);
+  //console.log("crisis_table_values by crisis id", crisis_table_values[crisisId]);
+
+  for (var key in crisis_table_values){
+      if (crisis_table_values[key]["status"] && crisis_table_values[key]["status"] == "open"){
+        var team = crisis_table_values[key]["team"];
+        var crisisId = crisis_table_values[key]["crisisID"];
+        var crisisAddress = crisis_table_values[key]["crisisAddress"];
+      }
   }
+
+  console.log("team = ", team, "crisisId = ", crisisId);
 
   // Get the values at team, crisisId, and crisisAddress. I need to write this as a promise thats fulfilled
   // before the get device tokens promise
-  const getCrisisDataPromise = admin.database().ref(`/crisis/${crisisId}/`).once("value");
-
-  return Promise.all([getCrisisDataPromise]).then(results => {
-    const crisisDataSnapshot = results[0].val();
-
-    var team = crisisDataSnapshot["team"];
-    var crisisAddress = crisisDataSnapshot["crisisAddress"];
-    console.log('We have a new crisis UID:', crisisId, ' for team:', team, ' at ', crisisAddress);
-
 
     // Get the list of device notification tokens.
     const getDeviceTokensPromise = admin.database().ref(`/teams/${team}/teamMembers/0/notificationToken/`).once('value');
 
-    return Promise.all([getDeviceTokensPromise]).then(results =>  {//the purpose here is to make sure both gets are fulfilled before moving on
-      const token = "fvIzSfQxfJI:APA91bF7JmtjcKon_xLUUEV4Hbb3D_ABqpsqYpEIMd3pnz12oSqQnrAPuPLenNCUirkhQaZ5DB85FYUIEZ_y0qOVdsUtcZO48_fFpxjIl5tnAmkpJ6w-IeTnqRW5yqZ0Dr3bxo9f_d1Q";//results[0].val();
+    return Promise.all([getDeviceTokensPromise]).then(results =>  {
+      var token = results[0].val();
+
+      console.log("The token from results is ", token);
 
       // Check if there are any device tokens.
 
@@ -58,8 +65,8 @@ exports.sendFollowerNotification = functions.database.ref('/crisis/{crisisId}/')
       // Notification details.
       const payload = {
         data: {
-          crisisId: crisisId,
-          crisisAddress: crisisAddress
+          crisis_timestamp: crisisId,
+          crisis_address: crisisAddress
         }
       };
 
@@ -76,4 +83,4 @@ exports.sendFollowerNotification = functions.database.ref('/crisis/{crisisId}/')
       });
       });
   });
-});
+
