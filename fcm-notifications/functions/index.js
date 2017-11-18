@@ -39,7 +39,7 @@ exports.sendCrisisNotification = functions.database.ref('/crisis/').onWrite(even
 
   for (var key in crisis_table_values){
       if (crisis_table_values[key]["status"] && crisis_table_values[key]["status"] == "open"){
-        var team = crisis_table_values[key]["team"];
+        var team = crisis_table_values[key]["teamName"];
         var crisisId = crisis_table_values[key]["crisisID"];
         var crisisAddress = crisis_table_values[key]["crisisAddress"];
       }
@@ -51,28 +51,36 @@ exports.sendCrisisNotification = functions.database.ref('/crisis/').onWrite(even
   // before the get device tokens promise
 
     // Get the list of device notification tokens.
-    const getDeviceTokensPromise = admin.database().ref(`/teams/${team}/teamMembers/0/notificationToken/`).once('value');
 
-    return Promise.all([getDeviceTokensPromise]).then(results =>  {
-      var token = results[0].val();
+    const getTeamMemberNotifications = admin.database().ref(`/teams/${team}/teamMembers/`).once('value');
 
-      console.log("The token from results is ", token);
+    return Promise.all([getTeamMemberNotifications]).then(results =>  {
+      var teamMembers = results[0].val();
+      var tokens = [];
 
-      // Check if there are any device tokens.
+      console.log("The first team member is ", teamMembers[0]);
 
-      console.log('The token is', token);
+      for (var key in teamMembers) {
+        if (teamMembers.hasOwnProperty(key)) {
+          console.log(key + " -> " + teamMembers[key]["token"]);
+          tokens.push(teamMembers[key]["token"]);
+        }
+      }
 
       // Notification details.
       const payload = {
         data: {
-          crisis_timestamp: crisisId,
+          crisis_id: crisisId,
           crisis_address: crisisAddress
         }
       };
 
+      // testing
+
+      var token = 0;
 
       // Send notifications to all tokens.
-      return admin.messaging().sendToDevice(token, payload).then(response => {
+      return admin.messaging().sendToDevice(tokens[0], payload).then(response => {
         response.results.forEach((result, index) => {
           const error = result.error;
           if (error) {
