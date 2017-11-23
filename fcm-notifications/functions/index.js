@@ -52,43 +52,43 @@ exports.sendCrisisNotification = functions.database.ref('/crisis/').onWrite(even
 
     // Get the list of device notification tokens.
 
-    const getTeamMemberNotifications = admin.database().ref(`/teams/${team}/teamMembers/`).once('value');
+  const getTeamMemberNotifications = admin.database().ref(`/teams/${team}/teamMembers/`).once('value');
 
-    return Promise.all([getTeamMemberNotifications]).then(results =>  {
-      var teamMembers = results[0].val();
-      var tokens = [];
+  return Promise.all([getTeamMemberNotifications]).then(results =>  {
+    var teamMembers = results[0].val();
+    var tokens = [];
 
-      console.log("The first team member is ", teamMembers[0]);
+    console.log("The first team member is ", teamMembers[0]);
 
-      for (var key in teamMembers) {
-        if (teamMembers.hasOwnProperty(key)) {
-          console.log(key + " -> " + teamMembers[key]["token"]);
-          tokens.push(teamMembers[key]["token"]);
-        }
+    for (var key in teamMembers) {
+      if (teamMembers.hasOwnProperty(key)) {
+        console.log(key + " -> " + teamMembers[key]["token"]);
+        tokens.push(teamMembers[key]["token"]);
       }
+    }
 
-      // Notification details.
-      const payload = {
-        data: {
-          crisis_id: crisisId,
-          crisis_address: crisisAddress
+    // Notification details.
+    const payload = {
+      data: {
+        crisis_id: crisisId,
+        crisis_address: crisisAddress
+      }
+    };
+
+    // testing
+
+    var token = 0;
+
+    // Send notifications to all tokens.
+    return admin.messaging().sendToDevice(tokens[0], payload).then(response => {
+      response.results.forEach((result, index) => {
+        const error = result.error;
+        if (error) {
+          console.error('Failure sending notification to', tokens[index], error);
+          // Cleanup the tokens who are not registered anymore.
         }
-      };
-
-      // testing
-
-      var token = 0;
-
-      // Send notifications to all tokens.
-      return admin.messaging().sendToDevice(tokens[0], payload).then(response => {
-        response.results.forEach((result, index) => {
-          const error = result.error;
-          if (error) {
-            console.error('Failure sending notification to', tokens[index], error);
-            // Cleanup the tokens who are not registered anymore.
-          }
-        });
       });
-      });
+    });
+    });
   });
 
